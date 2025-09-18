@@ -1,0 +1,216 @@
+C51 COMPILER V9.51   MAIN                                                                  09/17/2025 15:58:03 PAGE 1   
+
+
+C51 COMPILER V9.51, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\output\main.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE source\main.c BROWSE INCDIR(.\inc) DEBUG OBJECTEXTEND PRINT(.\list\main.lst
+                    -) TABS(2) OBJECT(.\output\main.obj)
+
+line level    source
+
+   1          #include "STC15F2K60S2.H"        //必须。
+   2          #include "sys.H"                 //必须。
+   3          #include "Uart1.H" 
+   4          #include "displayer.H" 
+   5          #include "key.H" 
+   6          #include "beep.H" 
+   7          #include "adc.h"
+   8          code unsigned long SysClock=11059200;         //必须。定义系统工作时钟频率(Hz)，用户必须修改成与实际工作频
+             -率（下载时选择的）一致
+   9          #ifdef _displayer_H_                          //显示模块选用时必须。（数码管显示译码表，用戶可修改、增加等
+             -） 
+  10          code char decode_table[]={
+  11                   0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f,0x00,0x08,0x40,0x01,0x41,0x48,0x76,0x00,0x00,0x0
+             -0,
+  12           /* ??:   0  1    2    3    4    5    6    7    8    9    10   11   12   13   14   15   16   17   18   19  */
+  13           /* ??:   0  1    2    3    4    5    6    7    8    9   (?)  ?-  ?-  ?-  ??-  ??-                 */  
+  14                   0x3f|0x80,0x06|0x80,0x5b|0x80,0x4f|0x80,0x66|0x80,0x6d|0x80,0x7d|0x80,0x07|0x80,0x7f|0x80,0x6f|0x8
+             -0,  
+  15           /* ??:   20        21        22        23        24        25        26         27        28        29   
+             -  */
+  16           /* ???? 0         1         2         3         4         5         6          7         8         9     
+             - */
+  17                   0x77,0x7c,0x39,0x5E,0x79,0x71,0x3D,0x76,0x30,0x1E,0x75,0x38,0x15,0x37,0x3F,0x73,0x6B,0x33,0x6D,0x31,
+             -0x3E,0x3E,0x2A,0x76,0x66,0x5B,
+  18           /* ??:30   31   32   33   34   35   36   37   38   39   40   41   42   43   44   45   46   47   48   49  
+             - 50   51   52   53   54   55   */
+  19           /*??   A    B    C    D    E    F    G    H    I    J    K    L    M    N    O    P    Q    R    S    T    
+             -U    V    W    X    Y    Z    */
+  20                   0x37|0x80,0x79|0x80,0x5E|0x80,0x6D|0x80,0x30|0x80,0x31|0x80,0x37|0x80
+  21           /* ??:    56        57        58        59        60        61        62    */  
+  22           /*??      N.        E.        d.        s.        I.        t.        n.    */
+  23           /*???? Mon.      TuE.      Wed.     Thurs.     FrI.      Sat.      Sun.   */
+  24          };
+  25          #endif
+  26          
+  27          unsigned char start_cam[5]={0xAA,0x55,0x00};//按K3，开始识别
+  28          unsigned char in[5]={0xAA,0x44,0x00};//开始入库
+  29          unsigned char out[5]={0xAA,0x33,0x00};//开始入库
+  30          unsigned char luxstop[5]={0xCC,0x55,0x01};//光照低，停止识别
+  31          unsigned char luxstart[5]={0xCC,0x55,0x02};//开始识别的信息
+  32          unsigned char recstore[5];//接收到的存在这
+  33          unsigned char recmask[1]={0xBB};//接收到成功的包头BB开始
+  34          char a=10;
+  35          char state=1;//控制显示，0：error 1：welcome 2：城市月日
+  36          unsigned char timer_5s = 0;//5s计时器
+  37          unsigned char display_data[8];//识别成功后显示的
+  38          void my1S_callback(){
+  39   1        if (++timer_5s >= 5) {
+  40   2          timer_5s = 0;
+  41   2          state=1;
+  42   2          if(GetADC().Rop<20){
+  43   3            SetBeep(3000,150);
+  44   3            state=0;
+  45   3            Uart1Print(luxstop,sizeof(luxstop));
+C51 COMPILER V9.51   MAIN                                                                  09/17/2025 15:58:03 PAGE 2   
+
+  46   3          }
+  47   2          
+  48   2        }
+  49   1      }
+  50          void myNav_callback()
+  51          { char k;
+  52   1        k=GetAdcNavAct(enumAdcNavKey3);
+  53   1        if( k == enumKeyPress ) {
+  54   2          SetBeep(1800,20);
+  55   2          
+  56   2          Uart1Print(start_cam,sizeof(start_cam));
+  57   2      }}
+  58          void mykey_callback()
+  59          {
+  60   1        char r;
+  61   1        char g;
+  62   1        r=GetKeyAct(enumKey1);
+  63   1        g=GetKeyAct(enumKey2);
+  64   1        if( r == enumKeyPress ) {
+  65   2          SetBeep(1800,20);
+  66   2          state=3;
+  67   2          Uart1Print(in,sizeof(in));
+  68   2      }
+  69   1        if( g == enumKeyPress ) {
+  70   2          SetBeep(1800,20);
+  71   2          state=4;
+  72   2          Uart1Print(out,sizeof(out));
+  73   2      }
+  74   1      }
+  75          void my10mS_callback()
+  76          
+  77          { 
+  78   1        if (state==0)
+  79   1        Seg7Print(a,34,47,47,44,47,a,a);
+  80   1        if (state==1)
+  81   1        Seg7Print(52,34,41,32,44,42,34,a);
+  82   1        if (state==2)
+  83   1        Seg7Print(display_data[0], display_data[1], display_data[2], display_data[3],
+  84   1              display_data[4], display_data[5], display_data[6], display_data[7]);
+  85   1        if (state==3)
+  86   1          Seg7Print(43,44,52,a,a,38,43,a);
+  87   1        if (state==4)
+  88   1          Seg7Print(43,44,52,a,a,44,50,49);
+  89   1      }
+  90          void rec_callback()
+  91          {
+  92   1        char city;
+  93   1        char month;
+  94   1        char day;
+  95   1        // 8位数码管
+  96   1        
+  97   1      
+  98   1        city = recstore[1];   
+  99   1        month = recstore[2];  
+ 100   1        day = recstore[3];   
+ 101   1        state=2;
+ 102   1        SetBeep(4000,5);
+ 103   1        switch(city)
+ 104   1        {
+ 105   2          case 0x01: // ChangSha 
+ 106   2            display_data[0] = 32; // 'C'
+ 107   2            display_data[1] = 48; // 'S'
+C51 COMPILER V9.51   MAIN                                                                  09/17/2025 15:58:03 PAGE 3   
+
+ 108   2            break;
+ 109   2          case 0x02: // XiangTan 
+ 110   2            display_data[0] = 53; // 'X'
+ 111   2            display_data[1] = 49; // 'T'
+ 112   2            break;
+ 113   2          case 0x03: // ZhuZhou 
+ 114   2            display_data[0] = 55; // 'Z'
+ 115   2            display_data[1] = 55; // 'Z'
+ 116   2            break;
+ 117   2          case 0x04: // HengYang 
+ 118   2            display_data[0] = 37; // 'H'
+ 119   2            display_data[1] = 54; // 'Y'
+ 120   2            break;
+ 121   2          case 0x05: // ShaoYang 
+ 122   2            display_data[0] = 48; // 'S'
+ 123   2            display_data[1] = 54; // 'Y'
+ 124   2            break;
+ 125   2          case 0x06: // YueYang 
+ 126   2            display_data[0] = 54; // 'Y'
+ 127   2            display_data[1] = 54; // 'Y'
+ 128   2            break;
+ 129   2          case 0x07: // ZhangJiaJie
+ 130   2            display_data[0] = 55; // 'Z'
+ 131   2            display_data[1] = 39; // 'J'
+ 132   2            break;
+ 133   2          default: // "Err"
+ 134   2            display_data[0] = 34; // 'E'
+ 135   2            display_data[1] = 47; // 'r'
+ 136   2            display_data[2] = 47; // 'r'
+ 137   2            break;
+ 138   2        }
+ 139   1      
+ 140   1      
+ 141   1        display_data[2] = 12; // 分隔符
+ 142   1      
+ 143   1      
+ 144   1        display_data[3] = month / 10; 
+ 145   1        display_data[4] = month % 10; 
+ 146   1        
+ 147   1      
+ 148   1        display_data[5] = 12; // '-'
+ 149   1        
+ 150   1      
+ 151   1        display_data[6] = day / 10;   
+ 152   1        display_data[7] = day % 10;   
+ 153   1        
+ 154   1        
+ 155   1      }
+ 156          void main() 
+ 157          { 
+ 158   1        Uart1Init(9600);
+ 159   1        DisplayerInit();  
+ 160   1        KeyInit();
+ 161   1        BeepInit();
+ 162   1        AdcInit();
+*** WARNING C209 IN LINE 162 OF source\main.c: '_AdcInit': too few actual parameters
+ 163   1        SetDisplayerArea(0,7);  
+ 164   1        //SetUart1Rxd(rxdbuf, sizeof(rxdbuf), 0, 0);  
+ 165   1        //SetEventCallBack(enumEventUart1Rxd, myrxd1);
+ 166   1        SetUart1Rxd(recstore, 5, recmask, 1); 
+ 167   1        SetEventCallBack(enumEventUart1Rxd,rec_callback);
+ 168   1        SetEventCallBack(enumEventKey,mykey_callback);
+C51 COMPILER V9.51   MAIN                                                                  09/17/2025 15:58:03 PAGE 4   
+
+ 169   1        SetEventCallBack(enumEventNav, myNav_callback);
+ 170   1        SetEventCallBack(enumEventSys1S, my1S_callback);
+ 171   1        SetEventCallBack(enumEventSys10mS, my10mS_callback);
+ 172   1        MySTC_Init();  
+ 173   1        while(1)              
+ 174   1          { MySTC_OS();    
+ 175   2          }              
+ 176   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    615    ----
+   CONSTANT SIZE    =     67    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     42       5
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)
